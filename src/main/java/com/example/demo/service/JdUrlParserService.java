@@ -1,14 +1,12 @@
 package com.example.demo.service;
 
 import org.springframework.stereotype.Service;
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 
 @Service
 public class JdUrlParserService {
-
     public String getProductIdFromUrl(String url) {
         try {
             URI uri = new URI(url);

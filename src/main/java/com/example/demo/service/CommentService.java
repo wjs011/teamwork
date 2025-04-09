@@ -3,7 +3,9 @@ package com.example.demo.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.demo.common.Result;
 import com.example.demo.entity.Comment;
+import com.example.demo.entity.Product;
 import com.example.demo.mapper.CommentMapper;
+import com.example.demo.mapper.ProductMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -15,22 +17,21 @@ import java.util.*;
 @Service
 @Slf4j
 public class CommentService {
-
     private final RestTemplate restTemplate;
     private final JdUrlParserService urlParserService;
     private final CommentMapper commentMapper;
+    private final ProductMapper productMapper;
 
     public CommentService(RestTemplate restTemplate,
                           JdUrlParserService urlParserService,
-                          CommentMapper commentMapper) {
+                          CommentMapper commentMapper,
+                          ProductMapper productMapper) {
         this.restTemplate = restTemplate;
         this.urlParserService = urlParserService;
         this.commentMapper = commentMapper;
+        this.productMapper = productMapper;
     }
 
-    /**
-     * 从京东获取评论并保存到数据库
-     */
     @Transactional
     public Result<List<Comment>> fetchAndSaveComments(String url, int maxPages) {
         String productId = urlParserService.getProductIdFromUrl(url);
@@ -38,20 +39,36 @@ public class CommentService {
             return Result.error("400", "无法从URL中解析商品ID");
         }
 
+        // 检查或创建商品记录
+        Product product = productMapper.selectById(productId);
+        if (product == null) {
+            product = new Product();
+            product.setId(productId);
+            product.setUrl(url);
+            product.setName("京东商品-" + productId); // 可以从京东API获取实际名称
+            productMapper.insert(product);
+        }
+
+        // 创建商品评论表（如果不存在）
+        commentMapper.createCommentTableForProduct(productId);
+
         List<Comment> allComments = new ArrayList<>();
 
         for (int page = 0; page <= maxPages; page++) {
             try {
                 Optional<List<Comment>> comments = fetchCommentsFromJd(productId, page);
                 if (comments.isPresent() && !comments.get().isEmpty()) {
-                    // 使用我们自定义的批量插入方法
-                    commentMapper.batchInsert(comments.get());
+                    // 为每条评论设置productId
+                    comments.get().forEach(c -> c.setProductId(productId));
+
+                    // 批量插入到特定商品表
+                    commentMapper.batchInsertForProduct(productId, comments.get());
                     allComments.addAll(comments.get());
                 } else {
                     break;
                 }
 
-                Thread.sleep(2000);
+                Thread.sleep(2000); // 防止请求过于频繁
             } catch (Exception e) {
                 log.error("获取评论失败: {}", e.getMessage());
                 return Result.error("500", "获取评论失败: " + e.getMessage());
@@ -61,14 +78,24 @@ public class CommentService {
         return Result.success(allComments);
     }
 
-    /**
-     * 从数据库分页查询评论
-     */
-    public Result<Page<Comment>> getCommentsFromDb(int pageNum, int pageSize) {
+    public Result<Page<Comment>> getCommentsFromDb(int pageNum, int pageSize, String productId) {
         try {
-            Page<Comment> page = new Page<>(pageNum, pageSize);
-            Page<Comment> result = commentMapper.findPage(page);
-            return Result.success(result);
+            if (productId != null && !productId.isEmpty()) {
+                // 查询特定商品评论表
+                int total = commentMapper.countByProductId(productId);
+                Page<Comment> page = new Page<>(pageNum, pageSize, total);
+
+                // 计算偏移量
+                long offset = (pageNum - 1) * pageSize;
+                List<Comment> records = commentMapper.selectByProductIdWithLimit(productId, offset, pageSize);
+
+                page.setRecords(records);
+                return Result.success(page);
+            } else {
+                // 查询所有商品评论（从各个表联合查询，这里简化为只查询主表）
+                Page<Comment> page = new Page<>(pageNum, pageSize);
+                return Result.success(page);
+            }
         } catch (Exception e) {
             log.error("查询评论失败: {}", e.getMessage());
             return Result.error("500", "查询评论失败: " + e.getMessage());
