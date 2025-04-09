@@ -18,10 +18,8 @@ public class CommentController {
     }
 
     @GetMapping("/fetch")
-    public Result<List<Comment>> fetchComments(
-            @RequestParam String url,
-            @RequestParam(defaultValue = "5") int maxPages) {
-        return commentService.fetchAndSaveComments(url, maxPages);
+    public Result<List<Comment>> fetchComments(@RequestParam String url) {
+        return commentService.fetchAndSaveComments(url);
     }
 
     @GetMapping("")
