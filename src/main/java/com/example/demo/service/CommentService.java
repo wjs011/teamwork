@@ -26,11 +26,13 @@ public class CommentService {
     public CommentService(RestTemplate restTemplate,
                           JdUrlParserService urlParserService,
                           CommentMapper commentMapper,
-                          ProductMapper productMapper) {
+                          ProductMapper productMapper
+                         ) {
         this.restTemplate = restTemplate;
         this.urlParserService = urlParserService;
         this.commentMapper = commentMapper;
         this.productMapper = productMapper;
+
     }
 
     @Transactional
@@ -77,9 +79,14 @@ public class CommentService {
                 try {
                     Optional<JdCommentResponse> pageResponse = fetchCommentsFromJd(productId, page);
                     if (pageResponse.isPresent() && !pageResponse.get().getComments().isEmpty()) {
-                        pageResponse.get().getComments().forEach(c -> c.setProductId(productId));
-                        commentMapper.batchInsertForProduct(productId, pageResponse.get().getComments());
-                        allComments.addAll(pageResponse.get().getComments());
+                        List<Comment> comments = pageResponse.get().getComments();
+                        comments.forEach(c -> {
+                            c.setProductId(productId);
+
+                        });
+
+                        commentMapper.batchInsertForProduct(productId, comments);
+                        allComments.addAll(comments);
                     } else {
                         hasMore = false;
                     }
@@ -144,7 +151,6 @@ public class CommentService {
 
     public Result<Page<Comment>> getCommentsFromDb(int pageNum, int pageSize, String productId) {
         try {
-            if (productId != null && !productId.isEmpty()) {
                 // 查询特定商品评论表
                 int total = commentMapper.countByProductId(productId);
                 Page<Comment> page = new Page<>(pageNum, pageSize, total);
@@ -155,11 +161,6 @@ public class CommentService {
 
                 page.setRecords(records);
                 return Result.success(page);
-            } else {
-                // 查询所有商品评论（从各个表联合查询，这里简化为只查询主表）
-                Page<Comment> page = new Page<>(pageNum, pageSize);
-                return Result.success(page);
-            }
         } catch (Exception e) {
             log.error("查询评论失败: {}", e.getMessage());
             return Result.error("500", "查询评论失败: " + e.getMessage());

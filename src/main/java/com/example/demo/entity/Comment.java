@@ -11,4 +11,6 @@ public class Comment {
     private String nickname;    // 用户昵称
     private Integer score;      // 评分
     private LocalDateTime createTime; // 创建时间
+    private Double sentimentScore;  // 情感评分
+    private String sentimentLabel; // 情感标签
 }

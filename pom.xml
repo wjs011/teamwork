@@ -45,11 +45,21 @@
             <artifactId>mybatis-plus-jsqlparser</artifactId>
             <version>3.5.9</version> <!-- 确保版本与 MyBatis Plus 主包一致 -->
         </dependency>
-
+        <dependency>
+            <groupId>com.hankcs</groupId>
+            <artifactId>hanlp</artifactId>
+            <version>portable-1.8.4</version>
+        </dependency>
+      
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <version>1.3.2</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
