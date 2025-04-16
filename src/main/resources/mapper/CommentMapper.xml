@@ -16,4 +16,19 @@
         ORDER BY id DESC
         LIMIT #{offset}, #{pageSize}
     </select>
+    <select id="selectByProductIdAndScoreRangeWithLimit" resultMap="BaseResultMap">
+        <bind name="tableName" value="'comment_' + productId"/>
+        SELECT * FROM ${tableName}
+        WHERE score BETWEEN #{minScore} AND #{maxScore}
+        ORDER BY id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="selectByProductIdAndKeywordWithLimit" resultMap="BaseResultMap">
+        <bind name="tableName" value="'comment_' + productId"/>
+        SELECT * FROM ${tableName}
+        WHERE content LIKE CONCAT('%',#{keyword},'%')
+        ORDER BY id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
 </mapper>

@@ -10,7 +10,23 @@ import java.util.List;
 public interface CommentMapper extends BaseMapper<Comment> {
     @Select("SELECT * FROM comment_${productId} ORDER BY id DESC")
     List<Comment> selectByProductId(@Param("productId") String productId);
+    @Select("SELECT * FROM comment_${productId} WHERE score BETWEEN #{minScore} AND #{maxScore} ORDER BY id DESC")
+    List<Comment> selectByProductIdAndScoreRange(
+            @Param("productId") String productId,
+            @Param("minScore") int minScore,
+            @Param("maxScore") int maxScore);
 
+    // 根据商品ID和关键词查询评论
+    @Select("SELECT * FROM comment_${productId} WHERE content LIKE CONCAT('%',#{keyword},'%') ORDER BY id DESC")
+    List<Comment> selectByProductIdAndKeyword(
+            @Param("productId") String productId,
+            @Param("keyword") String keyword);
+
+    // 删除评论
+    @Delete("DELETE FROM comment_${productId} WHERE id = #{commentId}")
+    int deleteComment(
+            @Param("productId") String productId,
+            @Param("commentId") Long commentId);
     // ✅ 使用 XML 中的 SQL，声明方法，不加注解
     List<Comment> selectByProductIdWithLimit(
             @Param("productId") String productId,

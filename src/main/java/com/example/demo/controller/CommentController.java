@@ -80,6 +80,42 @@ public class CommentController {
 
         return Result.success(keywords);
     }
+    /**
+     * 根据评分范围查询评论
+     * @param productId 商品ID
+     * @param minScore 最低评分(1-5)
+     * @param maxScore 最高评分(1-5)
+     */
+    @GetMapping("/score/{productId}")
+    public Result<List<Comment>> getCommentsByScore(
+            @PathVariable String productId,
+            @RequestParam(defaultValue = "1") int minScore,
+            @RequestParam(defaultValue = "5") int maxScore) {
+        return commentService.getCommentsByScoreRange(productId, minScore, maxScore);
+    }
 
+    /**
+     * 根据关键词搜索评论
+     * @param productId 商品ID
+     * @param keyword 搜索关键词
+     */
+    @GetMapping("/search/{productId}")
+    public Result<List<Comment>> searchComments(
+            @PathVariable String productId,
+            @RequestParam String keyword) {
+        return commentService.searchCommentsByKeyword(productId, keyword);
+    }
+
+    /**
+     * 删除评论
+     * @param productId 商品ID
+     * @param commentId 评论ID
+     */
+    @DeleteMapping("/{productId}/{commentId}")
+    public Result<String> deleteComment(
+            @PathVariable String productId,
+            @PathVariable Long commentId) {
+        return commentService.deleteComment(productId, commentId);
+    }
 
 }

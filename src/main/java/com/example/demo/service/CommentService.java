@@ -167,5 +167,48 @@ public class CommentService {
         }
     }
 
+    /**
+     * 根据评分范围查询评论
+     */
+    public Result<List<Comment>> getCommentsByScoreRange(String productId, int minScore, int maxScore) {
+        try {
+            List<Comment> comments = commentMapper.selectByProductIdAndScoreRange(productId, minScore, maxScore);
+            return Result.success(comments);
+        } catch (Exception e) {
+            log.error("根据评分查询评论失败: {}", e.getMessage());
+            return Result.error("500", "根据评分查询评论失败: " + e.getMessage());
+        }
+    }
 
+    /**
+     * 根据关键词查询评论
+     */
+    public Result<List<Comment>> searchCommentsByKeyword(String productId, String keyword) {
+        try {
+            List<Comment> comments = commentMapper.selectByProductIdAndKeyword(productId, keyword);
+            return Result.success(comments);
+        } catch (Exception e) {
+            log.error("根据关键词查询评论失败: {}", e.getMessage());
+            return Result.error("500", "根据关键词查询评论失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 删除评论
+     */
+    @Transactional
+    public Result<String> deleteComment(String productId, Long commentId) {
+        try {
+            int affectedRows = commentMapper.deleteComment(productId, commentId);
+            if (affectedRows > 0) {
+                return Result.success("评论删除成功");
+            } else {
+                return Result.error("404", "未找到指定评论");
+            }
+        } catch (Exception e) {
+            log.error("删除评论失败: {}", e.getMessage());
+            return Result.error("500", "删除评论失败: " + e.getMessage());
+        }
+    }
 }
+
