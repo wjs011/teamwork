@@ -5,12 +5,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.demo.common.Result;
+import com.example.demo.entity.Admin;
 import com.example.demo.entity.User;
+import com.example.demo.mapper.AdminMapper;
 import jakarta.annotation.Resource;
 import com.example.demo.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -19,6 +22,23 @@ public class UserController {
 
     @Resource
     UserMapper userMapper;
+
+    @Resource
+    AdminMapper adminMapper; // 注入AdminMapper
+
+    // 在需要管理员权限的方法中添加检查
+    private boolean checkAdminPermission(String token) {
+        if (token == null || token.isEmpty()) {
+            return false;
+        }
+
+        Admin admin = adminMapper.selectOne(Wrappers.<Admin>lambdaQuery()
+                .eq(Admin::getToken, token));
+
+        return admin != null &&
+                admin.getTokenExpireTime() != null &&
+                admin.getTokenExpireTime().isAfter(LocalDateTime.now());
+    }
 
     @PostMapping
     public Result<?> save(@RequestBody User user) {
@@ -72,7 +92,11 @@ public class UserController {
 
     }
     @DeleteMapping("/{id}")
-    public Result<?> delete(@PathVariable Integer id) {
+    public Result<?> delete(@PathVariable Integer id, @RequestHeader("Authorization") String token) {
+
+        if(!checkAdminPermission(token)) {
+            return Result.error("-1", "无权限操作");
+        }
         userMapper.deleteById(id);
         return Result.success();
     }
