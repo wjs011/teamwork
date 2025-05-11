@@ -33,7 +33,7 @@ public interface CommentMapper extends BaseMapper<Comment> {
             @Param("offset") long offset,
             @Param("pageSize") int pageSize);
 
-    @Update("CREATE TABLE IF NOT EXISTS comment_${productId} (" +
+    @Insert("CREATE TABLE IF NOT EXISTS comment_${productId} (" +
             "id BIGINT AUTO_INCREMENT PRIMARY KEY, " +
             "product_id VARCHAR(64) NOT NULL, " +
             "content TEXT, " +

@@ -93,6 +93,12 @@ public class CommentController {
             @RequestParam(defaultValue = "5") int maxScore) {
         return commentService.getCommentsByScoreRange(productId, minScore, maxScore);
     }
+    @GetMapping("/score")
+    public Result<List<Comment>> getallCommentsByScore(
+            @RequestParam(defaultValue = "1") int minScore,
+            @RequestParam(defaultValue = "5") int maxScore) {
+        return commentService.getCommentsByScoreRange(null, minScore, maxScore);
+    }
 
     /**
      * 根据关键词搜索评论
@@ -105,7 +111,12 @@ public class CommentController {
             @RequestParam String keyword) {
         return commentService.searchCommentsByKeyword(productId, keyword);
     }
+    @GetMapping("/search")
+    public Result<List<Comment>> searchallComments(
 
+            @RequestParam String keyword) {
+        return commentService.searchCommentsByKeyword(null, keyword);
+    }
     /**
      * 删除评论
      * @param productId 商品ID

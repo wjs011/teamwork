@@ -12,6 +12,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.*;
 
@@ -55,6 +56,18 @@ public class CommentService {
         // 创建商品评论表（如果不存在）
         commentMapper.createCommentTableForProduct(productId);
 
+        // 检查数据库中是否已有评论数据
+        int existingCommentsCount = commentMapper.countByProductId(productId);
+        if (existingCommentsCount > 0) {
+            // 如果数据库已有评论，直接返回第一页数据
+            List<Comment> comments = commentMapper.selectByProductIdWithLimit(productId, 0, 10);
+            if (comments != null && !comments.isEmpty()) {
+                return Result.success(comments);
+            }
+            // 如果查询结果为空，继续执行爬取逻辑
+        }
+
+        // 如果数据库没有评论，则开始爬取
         List<Comment> allComments = new ArrayList<>();
         int maxPages = 0;
         boolean hasMore = true;
@@ -80,11 +93,7 @@ public class CommentService {
                     Optional<JdCommentResponse> pageResponse = fetchCommentsFromJd(productId, page);
                     if (pageResponse.isPresent() && !pageResponse.get().getComments().isEmpty()) {
                         List<Comment> comments = pageResponse.get().getComments();
-                        comments.forEach(c -> {
-                            c.setProductId(productId);
-
-                        });
-
+                        comments.forEach(c -> c.setProductId(productId));
                         commentMapper.batchInsertForProduct(productId, comments);
                         allComments.addAll(comments);
                     } else {
@@ -96,12 +105,15 @@ public class CommentService {
                     // 继续尝试下一页
                 }
             }
+
+            if (allComments.isEmpty()) {
+                return Result.error("404", "未获取到商品评论数据");
+            }
+            return Result.success(allComments);
         } catch (Exception e) {
             log.error("获取评论失败: {}", e.getMessage());
             return Result.error("500", "获取评论失败: " + e.getMessage());
         }
-
-        return Result.success(allComments);
     }
 
     /**
@@ -113,14 +125,53 @@ public class CommentService {
                 productId, page);
 
         HttpHeaders headers = new HttpHeaders();
+        // 添加更多请求头，模拟真实浏览器
         headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+        headers.set("Accept", "application/json, text/javascript, */*; q=0.01");
+        headers.set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
+        headers.set("Accept-Encoding", "gzip, deflate, br");
+        headers.set("Connection", "keep-alive");
+        headers.set("Referer", "https://item.jd.com/" + productId + ".html");
+        headers.set("Origin", "https://item.jd.com");
+        headers.set("X-Requested-With", "XMLHttpRequest");
+        headers.set("sec-ch-ua", "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"96\", \"Google Chrome\";v=\"96\"");
+        headers.set("sec-ch-ua-mobile", "?0");
+        headers.set("sec-ch-ua-platform", "\"Windows\"");
+        headers.set("Sec-Fetch-Dest", "empty");
+        headers.set("Sec-Fetch-Mode", "cors");
+        headers.set("Sec-Fetch-Site", "same-site");
 
-        ResponseEntity<Map> response = restTemplate.exchange(
-                url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
 
-        if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-            return parseComments(response.getBody());
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                String responseBody = response.getBody();
+                
+                // 检查是否是错误响应
+                if (responseBody.contains("系统繁忙") || responseBody.contains("访问受限")) {
+                    log.warn("京东API返回错误: {}", responseBody);
+                    // 等待一段时间后重试
+                    Thread.sleep(5000);
+                    return fetchCommentsFromJd(productId, page);
+                }
+                
+                // 使用 Jackson 手动解析 JSON 字符串
+                ObjectMapper mapper = new ObjectMapper();
+                Map<String, Object> jsonData = mapper.readValue(responseBody, Map.class);
+                return parseComments(jsonData);
+            }
+        } catch (Exception e) {
+            log.error("调用京东API失败: {}", e.getMessage());
+            // 如果是解析错误，可能是系统繁忙，等待后重试
+            if (e.getMessage().contains("系统繁忙")) {
+                try {
+                    Thread.sleep(5000);
+                    return fetchCommentsFromJd(productId, page);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
         return Optional.empty();
     }
@@ -151,16 +202,43 @@ public class CommentService {
 
     public Result<Page<Comment>> getCommentsFromDb(int pageNum, int pageSize, String productId) {
         try {
+            if (productId == null || productId.trim().isEmpty()) {
+                // 查询所有商品ID
+                List<String> productIds = productMapper.selectList(null)
+                        .stream().map(Product::getId).toList();
+                List<Comment> allComments = new ArrayList<>();
+                for (String pid : productIds) {
+                    try {
+                        List<Comment> comments = commentMapper.selectByProductId(pid);
+                        if (comments != null) {
+                            allComments.addAll(comments);
+                        }
+                    } catch (Exception e) {
+                        // 某个商品表不存在时跳过
+                    }
+                }
+                // 按时间倒序排序
+                allComments.sort((a, b) -> {
+                    if (a.getCreateTime() == null || b.getCreateTime() == null) return 0;
+                    return b.getCreateTime().compareTo(a.getCreateTime());
+                });
+                int total = allComments.size();
+                int fromIndex = Math.max(0, (pageNum - 1) * pageSize);
+                int toIndex = Math.min(fromIndex + pageSize, total);
+                List<Comment> pageRecords = fromIndex < toIndex ? allComments.subList(fromIndex, toIndex) : new ArrayList<>();
+                Page<Comment> page = new Page<>(pageNum, pageSize, total);
+                page.setRecords(pageRecords);
+                return Result.success(page);
+            } else {
                 // 查询特定商品评论表
                 int total = commentMapper.countByProductId(productId);
                 Page<Comment> page = new Page<>(pageNum, pageSize, total);
-
                 // 计算偏移量
                 long offset = (pageNum - 1) * pageSize;
                 List<Comment> records = commentMapper.selectByProductIdWithLimit(productId, offset, pageSize);
-
                 page.setRecords(records);
                 return Result.success(page);
+            }
         } catch (Exception e) {
             log.error("查询评论失败: {}", e.getMessage());
             return Result.error("500", "查询评论失败: " + e.getMessage());
@@ -172,8 +250,31 @@ public class CommentService {
      */
     public Result<List<Comment>> getCommentsByScoreRange(String productId, int minScore, int maxScore) {
         try {
-            List<Comment> comments = commentMapper.selectByProductIdAndScoreRange(productId, minScore, maxScore);
-            return Result.success(comments);
+            if (productId == null || productId.trim().isEmpty()) {
+                // 查询所有商品ID
+                List<String> productIds = productMapper.selectList(null)
+                        .stream().map(Product::getId).toList();
+                List<Comment> allComments = new ArrayList<>();
+                for (String pid : productIds) {
+                    try {
+                        List<Comment> comments = commentMapper.selectByProductIdAndScoreRange(pid, minScore, maxScore);
+                        if (comments != null) {
+                            allComments.addAll(comments);
+                        }
+                    } catch (Exception e) {
+                        // 某个商品表不存在时跳过
+                    }
+                }
+                // 按时间倒序排序
+                allComments.sort((a, b) -> {
+                    if (a.getCreateTime() == null || b.getCreateTime() == null) return 0;
+                    return b.getCreateTime().compareTo(a.getCreateTime());
+                });
+                return Result.success(allComments);
+            } else {
+                List<Comment> comments = commentMapper.selectByProductIdAndScoreRange(productId, minScore, maxScore);
+                return Result.success(comments);
+            }
         } catch (Exception e) {
             log.error("根据评分查询评论失败: {}", e.getMessage());
             return Result.error("500", "根据评分查询评论失败: " + e.getMessage());
@@ -185,8 +286,31 @@ public class CommentService {
      */
     public Result<List<Comment>> searchCommentsByKeyword(String productId, String keyword) {
         try {
-            List<Comment> comments = commentMapper.selectByProductIdAndKeyword(productId, keyword);
-            return Result.success(comments);
+            if (productId == null || productId.trim().isEmpty()) {
+                // 查询所有商品ID
+                List<String> productIds = productMapper.selectList(null)
+                        .stream().map(Product::getId).toList();
+                List<Comment> allComments = new ArrayList<>();
+                for (String pid : productIds) {
+                    try {
+                        List<Comment> comments = commentMapper.selectByProductIdAndKeyword(pid, keyword);
+                        if (comments != null) {
+                            allComments.addAll(comments);
+                        }
+                    } catch (Exception e) {
+                        // 某个商品表不存在时跳过
+                    }
+                }
+                // 按时间倒序排序
+                allComments.sort((a, b) -> {
+                    if (a.getCreateTime() == null || b.getCreateTime() == null) return 0;
+                    return b.getCreateTime().compareTo(a.getCreateTime());
+                });
+                return Result.success(allComments);
+            } else {
+                List<Comment> comments = commentMapper.selectByProductIdAndKeyword(productId, keyword);
+                return Result.success(comments);
+            }
         } catch (Exception e) {
             log.error("根据关键词查询评论失败: {}", e.getMessage());
             return Result.error("500", "根据关键词查询评论失败: " + e.getMessage());
