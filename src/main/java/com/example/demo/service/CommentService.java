@@ -272,6 +272,8 @@ public class CommentService {
                 });
                 return Result.success(allComments);
             } else {
+                // 确保评论表存在
+                commentMapper.createCommentTableForProduct(productId);
                 List<Comment> comments = commentMapper.selectByProductIdAndScoreRange(productId, minScore, maxScore);
                 return Result.success(comments);
             }

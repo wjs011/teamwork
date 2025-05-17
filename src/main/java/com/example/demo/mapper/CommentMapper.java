@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.*;
 
 import java.util.List;
 
+@Mapper
 public interface CommentMapper extends BaseMapper<Comment> {
     @Select("SELECT * FROM comment_${productId} ORDER BY id DESC")
     List<Comment> selectByProductId(@Param("productId") String productId);
@@ -53,4 +54,8 @@ public interface CommentMapper extends BaseMapper<Comment> {
 
     @Select("SELECT COUNT(*) FROM comment_${productId}")
     int countByProductId(@Param("productId") String productId);
+
+    void updateSentimentScore(@Param("productId") String productId,
+                            @Param("commentId") Long commentId,
+                            @Param("score") double score);
 }

@@ -6,6 +6,7 @@ import com.example.demo.entity.Comment;
 import com.example.demo.mapper.CommentMapper;
 import com.example.demo.service.CommentService;
 import com.example.demo.service.KeywordExtractionService;
+import com.example.demo.service.SentimentAnalysisService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -18,14 +19,17 @@ public class CommentController {
     private final CommentService commentService;
     private final CommentMapper commentMapper;
     private final KeywordExtractionService keywordExtractionService;
+    private final SentimentAnalysisService sentimentAnalysisService;
 
     // 构造函数注入所有依赖
     public CommentController(CommentService commentService,
                              CommentMapper commentMapper,
-                             KeywordExtractionService keywordExtractionService) {
+                             KeywordExtractionService keywordExtractionService,
+                             SentimentAnalysisService sentimentAnalysisService) {
         this.commentService = commentService;
         this.commentMapper = commentMapper;
         this.keywordExtractionService = keywordExtractionService;
+        this.sentimentAnalysisService = sentimentAnalysisService;
     }
 
     // 原有方法保持不变...
@@ -129,4 +133,44 @@ public class CommentController {
         return commentService.deleteComment(productId, commentId);
     }
 
+    /**
+     * 分析评论情感
+     * @param productId 商品ID
+     * @param request 包含评论列表的请求体
+     */
+    @PostMapping("/sentiment/{productId}")
+    public Result<Map<Long, Double>> analyzeSentiment(@PathVariable String productId, @RequestBody Map<String, Object> request) {
+        try {
+            List<Map<String, Object>> comments = (List<Map<String, Object>>) request.get("comments");
+            if (comments == null || comments.isEmpty()) {
+                return Result.error("400", "评论列表为空");
+            }
+
+            Map<Long, Double> sentimentScores = new HashMap<>();
+            for (Map<String, Object> comment : comments) {
+                Long id = Long.valueOf(comment.get("id").toString());
+                String content = (String) comment.get("content");
+                Double existingScore = (Double) comment.get("sentimentScore");
+                
+                // 如果评论已经有情感分析数据，直接使用
+                if (existingScore != null) {
+                    sentimentScores.put(id, existingScore);
+                    continue;
+                }
+                
+                // 否则进行情感分析
+                if (content != null && !content.trim().isEmpty()) {
+                    double score = sentimentAnalysisService.analyzeSentiment(content);
+                    sentimentScores.put(id, score);
+                    
+                    // 更新数据库中的情感得分
+                    commentMapper.updateSentimentScore(productId, id, score);
+                }
+            }
+
+            return Result.success(sentimentScores);
+        } catch (Exception e) {
+            return Result.error("500", "情感分析失败: " + e.getMessage());
+        }
+    }
 }

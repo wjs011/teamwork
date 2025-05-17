@@ -8,27 +8,39 @@
         <result column="nickname" property="nickname" />
         <result column="score" property="score" />
         <result column="create_time" property="createTime" />
+        <result column="sentiment_score" property="sentimentScore" />
+        <result column="sentiment_label" property="sentimentLabel" />
     </resultMap>
 
     <select id="selectByProductIdWithLimit" resultMap="BaseResultMap">
         <bind name="tableName" value="'comment_' + productId"/>
         SELECT * FROM ${tableName}
-        ORDER BY id DESC
+        WHERE product_id = #{productId}
+        ORDER BY create_time DESC
         LIMIT #{offset}, #{pageSize}
     </select>
     <select id="selectByProductIdAndScoreRangeWithLimit" resultMap="BaseResultMap">
         <bind name="tableName" value="'comment_' + productId"/>
         SELECT * FROM ${tableName}
-        WHERE score BETWEEN #{minScore} AND #{maxScore}
-        ORDER BY id DESC
+        WHERE product_id = #{productId}
+        AND score BETWEEN #{minScore} AND #{maxScore}
+        ORDER BY create_time DESC
         LIMIT #{offset}, #{pageSize}
     </select>
 
     <select id="selectByProductIdAndKeywordWithLimit" resultMap="BaseResultMap">
         <bind name="tableName" value="'comment_' + productId"/>
         SELECT * FROM ${tableName}
-        WHERE content LIKE CONCAT('%',#{keyword},'%')
-        ORDER BY id DESC
+        WHERE product_id = #{productId}
+        AND content LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY create_time DESC
         LIMIT #{offset}, #{pageSize}
     </select>
+
+    <update id="updateSentimentScore">
+        <bind name="tableName" value="'comment_' + productId"/>
+        UPDATE ${tableName}
+        SET sentiment_score = #{score}
+        WHERE id = #{commentId}
+    </update>
 </mapper>
