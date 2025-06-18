@@ -1,0 +1,10 @@
+# DeepSeek API配置
+deepseek:
+  api:
+    key: ${DEEPSEEK_API_KEY:sk-0bf2e5bee5014aa48df9a62edfa8fb09}
+    url: ${DEEPSEEK_API_URL:https://api.deepseek.com/v1/chat/completions}
+# Kimi API配置
+kimi:
+  api:
+    url: https://api.moonshot.cn/v1/chat/completions
+    key: sk-1tZ7eYGmfwYYPDVUqEq6UXbRKnbYla4R5ijWFFjE4z2waH1C 
